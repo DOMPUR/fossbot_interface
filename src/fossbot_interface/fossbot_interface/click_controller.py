@@ -8,13 +8,13 @@ import numpy as np
 class ClickController(Node):
     def __init__(self):
         super().__init__('click_controller')
-        self.declare_parameter('linear_speed', 0.5)
+        self.declare_parameter('linear_speed', 0.0)
         self.publisher_ = self.create_publisher(Twist, '/cmd_vel', 10)
         self.window_name = "FossBot - Panel Sterowania"
         self.image_height = 480
         self.image_width = 640
         self.display_image = np.ones((self.image_height, self.image_width, 3), dtype=np.uint8) * 40
-        
+
         cv2.line(self.display_image, (0, self.image_height // 2), (self.image_width, self.image_height // 2), (0, 255, 0), 2)
         cv2.putText(self.display_image, 'KLIKNIJ TUTAJ: PRZOD', (150, 200), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
         cv2.putText(self.display_image, 'KLIKNIJ TUTAJ: TYL', (150, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
@@ -22,7 +22,14 @@ class ClickController(Node):
         cv2.namedWindow(self.window_name)
         cv2.setMouseCallback(self.window_name, self.mouse_callback)
         self.timer = self.create_timer(0.1, self.timer_callback)
+        self.stop_robot()
         self.get_logger().info("Wezel sterowania uruchomiony.")
+
+    def stop_robot(self):
+        twist = Twist()
+        twist.linear.x = 0.0
+        twist.angular.z = 0.0
+        self.publisher_.publish(twist)
 
     def timer_callback(self):
         cv2.imshow(self.window_name, self.display_image)
@@ -32,20 +39,22 @@ class ClickController(Node):
         if event == cv2.EVENT_LBUTTONDOWN:
             twist = Twist()
             speed = self.get_parameter('linear_speed').value
-            
+
             if y < (self.image_height / 2):
                 self.get_logger().info("JAZDA W PRZOD")
                 twist.linear.x = speed   
             else:
                 self.get_logger().info("JAZDA W TYL")
                 twist.linear.x = -speed  
-                
+
             self.publisher_.publish(twist)
             feedback_img = self.display_image.copy()
             cv2.circle(feedback_img, (x, y), 20, (0, 0, 255), -1)
             cv2.imshow(self.window_name, feedback_img)
             cv2.waitKey(100)
-
+        if event == cv2.EVENT_RBUTTONDOWN:
+            self.stop_robot()
+            
 def main(args=None):
     rclpy.init(args=args)
     node = ClickController()
@@ -54,6 +63,7 @@ def main(args=None):
     except KeyboardInterrupt:
         pass
     finally:
+        node.stop_robot()
         node.destroy_node()
         cv2.destroyAllWindows()
         cv2.waitKey(1)
